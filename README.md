@@ -38,7 +38,7 @@ A legal officer in Doha opens a 40-page supply agreement. Half of it is in Arabi
 
 She has two options. Read all 40 pages. Or paste it into a chatbot that gives a confident summary, with no way to check where any of it came from.
 
-In law, an answer you can't verify is worth nothing. And more than 400 million people speak Arabic, while almost every contract tool is built for English first.
+In law, an answer you can't verify is worth nothing. And more than 400 million people speak Arabic, a language most contract tools treat as an afterthought.
 
 **Klara doesn't just summarise. It cites.**
 
@@ -48,15 +48,15 @@ In law, an answer you can't verify is worth nothing. And more than 400 million p
 
 **1. Upload.** A PDF or Word contract, in Arabic or English.
 
-**2. Read.** Klara cleans the text, splits it into passages, and pulls the passages that matter for 11 legal topics: payment, warranty, indemnity, liability caps, confidentiality, data protection under GDPR and Gulf PDPL, termination, governing law, force majeure, IP, and change of control.
+**2. Read.** Klara cleans the text and splits it into numbered passages. A short contract goes to the model whole. For a long one, Klara pulls the passages that matter for 13 legal topics, including payment, warranty, indemnity, liability caps, confidentiality, data protection under GDPR and Gulf PDPL, termination, governing law, force majeure, IP and change of control.
 
-**3. Cite.** One Gemini call turns those passages into parties, dates, money terms, risks and a summary, and every point has to name the passage it came from. Then ask questions in either language, and get answers with their sources attached.
+**3. Cite.** One Gemini call turns the numbered passages into parties, dates, money terms, risks and a summary, and every point has to name the passage it came from. Then ask questions in either language, and get answers with their sources attached.
 
 <table>
   <tr>
     <td width="50%" valign="top">
       <img alt="Klara answering a question with citations to the contract" src="./.github/assets/chat.png" width="100%">
-      <br><b>Ask, and see the source.</b> Every answer comes with the page and passage it is based on. Citations to text Klara never retrieved are thrown away.
+      <br><b>Ask, and see the source.</b> Answers come with the page and passage it is based on. Citations to text Klara never retrieved are thrown away.
     </td>
     <td width="50%" valign="top">
       <img alt="The full Klara interface in Arabic, right to left" src="./.github/assets/arabic.png" width="100%">
@@ -65,12 +65,12 @@ In law, an answer you can't verify is worth nothing. And more than 400 million p
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img alt="Contract overview with summary, parties and key dates" src="./.github/assets/overview.png" width="100%">
-      <br><b>The contract on one screen.</b> Summary, purpose, scope, governing law and money terms, each money term with its quoted source.
+      <img alt="Contract overview with summary, purpose, scope and risk profile" src="./.github/assets/overview.png" width="100%">
+      <br><b>The contract on one screen.</b> Summary, purpose, scope and a risk profile, with parties, dates and money terms one tab away.
     </td>
     <td width="50%" valign="top">
       <img alt="Contract list with filters for industry, governing law and status" src="./.github/assets/contracts.png" width="100%">
-      <br><b>The whole portfolio at a glance.</b> Filter by industry, governing law and status, with each contract's risk count on its card.
+      <br><b>The whole portfolio at a glance.</b> Filter by industry, governing law and status, with each contract's count of high and critical risks on its card.
     </td>
   </tr>
 </table>
@@ -79,9 +79,9 @@ In law, an answer you can't verify is worth nothing. And more than 400 million p
 
 ## Why this is hard
 
-**Arabic legal text breaks off-the-shelf pipelines.** Arabic-Indic digits, decorative letter stretching (tatweel), mixed-direction lines, and currencies written as ر.ق. Klara normalises all of it before anything else runs, then detects the language and embeds both languages in one shared vector space.
+**Arabic legal text breaks off-the-shelf pipelines.** Arabic-Indic digits, decorative letter stretching (tatweel) and long signature lines confuse extraction. Klara normalises them before anything else runs, then detects the language and embeds both languages in one shared vector space.
 
-**Language models invent clauses.** So Klara never asks the model to read the whole contract and remember it. It retrieves the evidence first, by legal topic, hands the model only those numbered passages, and requires a citation for every claim. In chat, any citation that points outside the supplied passages is dropped before you see it.
+**Language models invent clauses.** So Klara never lets the model answer from memory. It hands the model numbered passages (the whole contract when it is short, the passages retrieved for each topic when it is long) and requires a citation for every claim. In chat, any citation that points outside the supplied passages is dropped before you see it.
 
 <br>
 
@@ -91,39 +91,39 @@ In law, an answer you can't verify is worth nothing. And more than 400 million p
 flowchart LR
     A[Contract<br>PDF or DOCX] --> B[Clean text<br>Arabic normalised]
     B --> C[Passages<br>e5 + FAISS]
-    C --> D[Evidence for<br>11 legal topics]
+    C --> D[Numbered passages<br>whole or by topic]
     D --> E[Gemini<br>one JSON call]
     E --> F[(Cited risks,<br>parties, dates,<br>money, summary)]
     C --> G[Cited chat]
 ```
 
 <details>
-<summary><b>Real output: the six risks Klara found in the sample MSP agreement</b></summary>
+<summary><b>Real output from one run: the six risks Klara found in the sample MSP agreement</b></summary>
 
 <br>
 
-From [`msp-agreement.docx`](./backend/src/data_samples/english/msp-agreement.docx), a 9-page reseller agreement. Every row links back to a quoted passage on the page shown.
+From [`msp-agreement.docx`](./backend/src/data_samples/english/msp-agreement.docx), a 9-page managed service provider (MSP) agreement. Every row comes with a quoted passage from the page shown. Wording varies a little between runs.
 
 | Severity | Risk | Source |
 |---|---|---|
-| Critical | Overbroad and uncapped indemnification by the MSP | page 3: *"hold harmless, defend, and fully indemnify Company against any claims..."* |
-| High | Liability cap that protects only the vendor | page 5: *"IN NO EVENT SHALL COMPANY'S AGGREGATE LIABILITY FOR DIRECT DAMAGES..."* |
-| High | Restrictive conflict of interest clause | page 6: *"MSP will not accept work, enter into a contract..."* |
-| Medium | 48-hour cure period for license overages | page 3: *"MSP shall have forty-eight (48) hours to terminate the overage..."* |
-| Medium | Asymmetric 15-day cure period for termination | page 5: *"Company may terminate this Agreement upon fifteen (15) days written notice..."* |
-| Medium | No service levels and a narrow 90-day warranty | page 3: *"for a period of ninety (90) days from the date of shipment..."* |
+| Critical | Overbroad and Uncapped Indemnification by MSP | page 3: *"hold harmless, defend, and fully indemnify Company against any claims..."* |
+| High | Unilateral Liability Cap Favoring Company | page 5: *"IN NO EVENT SHALL COMPANY'S AGGREGATE LIABILITY FOR DIRECT DAMAGES..."* |
+| High | Restrictive Conflict of Interest / Non-Compete | page 6: *"MSP will not accept work, enter into a contract..."* |
+| Medium | Unrealistic 48-Hour Overage Cure Period | page 3: *"MSP shall have forty-eight (48) hours to terminate the overage..."* |
+| Medium | Asymmetric Short Cure Period for Termination | page 5: *"Company may terminate this Agreement upon fifteen (15) days written notice..."* |
+| Medium | Absence of Service Level Agreement and Narrow Warranty | page 3: *"for a period of ninety (90) days from the date of shipment..."* |
 
 </details>
 
 - **One call, not five.** Extraction, risk review and summary share one grounded prompt, which keeps every section consistent with the same evidence.
-- **Scoped to you.** Every query, including cross-contract search, only ever sees the signed-in user's contracts. JWT auth on every endpoint.
-- **15 API endpoints, 8 tables, 7 screens,** with 10 paired English and Arabic sample contracts in [`backend/src/data_samples`](./backend/src/data_samples).
+- **Scoped to you.** Every query, including cross-contract search, only ever sees the signed-in user's contracts. JWT auth on every contract and chat endpoint.
+- **15 API endpoints, 8 tables, 6 screens,** with five sample contracts, each in English and Arabic, in [`backend/src/data_samples`](./backend/src/data_samples).
 
 <br>
 
 ## Run it locally
 
-You need Python 3.11+, Node 18+ and a [Gemini API key](https://aistudio.google.com/apikey).
+You need Python 3.11 or 3.12, Node 18.17+ and a [Gemini API key](https://aistudio.google.com/apikey).
 
 ```bash
 # 1. API
@@ -155,7 +155,7 @@ Sign up, upload one of the sample contracts, and open it. The first upload downl
 - [ ] An accuracy benchmark on the paired English and Arabic sample contracts
 - [ ] Clause library and suggested redlines
 
-Klara was built in one weekend. It is a working prototype, and the list above is honest about the gap.
+Klara was built in one weekend at the AIX Hackathon: see the [hackathon-submission](../../tree/hackathon-submission) tag. Since then I grounded chat in real passages, saved the analysis with its citations and connected the chat sidebar. It is a working prototype, not a product, and the list above is honest about the gap.
 
 <br>
 
