@@ -1,0 +1,35 @@
+# Secrets
+.env
+.env.local
+.env*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+
+# Databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Uploaded contracts (keep the folder)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
