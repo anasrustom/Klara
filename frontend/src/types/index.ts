@@ -30,11 +30,13 @@ export interface Contract {
   id: string;
   title: string;
   file_name: string;
-  file_path: string;
+  file_path?: string;
   file_type: 'pdf' | 'docx';
   upload_date: string;
   uploaded_by: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
+  language?: 'en' | 'ar' | null;
+  pages?: number | null;
   
   // Extracted Data
   parties: ContractParty[];
@@ -53,11 +55,32 @@ export interface Contract {
   purpose: string;
   scope: string;
   risks: Risk[];
+  highlights?: string[];
+  key_obligations?: KeyObligation[];
+  undated_terms?: UndatedTerm[];
+  analyzed?: boolean;
+  analysis_error?: string | null;
   
   updated_at: string;
 }
 
-export interface ContractParty {
+// Where an extracted fact or finding appears in the contract text
+export interface SourceRef {
+  source_page?: number | null;
+  source_snippet?: string | null;
+}
+
+export interface KeyObligation {
+  party: string | null;
+  obligation: string;
+}
+
+export interface UndatedTerm {
+  type: KeyDate['date_type'];
+  description: string;
+}
+
+export interface ContractParty extends SourceRef {
   id: string;
   contract_id: string;
   name: string;
@@ -65,7 +88,7 @@ export interface ContractParty {
   role: 'client' | 'vendor' | 'partner' | 'other';
 }
 
-export interface KeyDate {
+export interface KeyDate extends SourceRef {
   id: string;
   contract_id: string;
   date_type: 'effective_date' | 'expiration_date' | 'renewal_date' | 'milestone' | 'other';
@@ -73,17 +96,17 @@ export interface KeyDate {
   description?: string;
 }
 
-export interface FinancialTerm {
+export interface FinancialTerm extends SourceRef {
   id: string;
   contract_id: string;
   term_type: 'payment' | 'penalty' | 'deposit' | 'other';
-  amount: number;
-  currency: string;
+  amount: number | null;
+  currency: string | null;
   schedule?: string;
   description?: string;
 }
 
-export interface Risk {
+export interface Risk extends SourceRef {
   id: string;
   contract_id: string;
   risk_type: 'missing_clause' | 'unusual_clause' | 'non_standard' | 'inconsistency' | 'compliance';
@@ -92,6 +115,7 @@ export interface Risk {
   description: string;
   recommendation?: string;
   clause_reference?: string;
+  source_chunk_id?: string | null;
 }
 
 // Clause Types
@@ -120,9 +144,19 @@ export interface ChatRequest {
   message: string;
 }
 
+export interface ChatCitation {
+  chunk_id: string;
+  page: number | null;
+  snippet: string;
+  contract_id?: string | null;
+  contract_title?: string | null;
+}
+
 export interface ChatResponse {
   response: string;
+  citations: ChatCitation[];
   sources?: string[];
+  confidence?: number;
 }
 
 // Upload Types

@@ -9,7 +9,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function UploadPage() {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -78,6 +78,8 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
+      // Analysis prose follows the interface language; quotes stay in the contract's language
+      formData.append('output_language', language);
 
       const token = localStorage.getItem('access_token');
       
