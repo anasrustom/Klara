@@ -95,7 +95,7 @@ class ExtractionService:
         genai.configure(api_key=settings.gemini_api_key)
 
         self.model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name=settings.gemini_model,
             generation_config={"response_mime_type": "application/json"}
         )
 

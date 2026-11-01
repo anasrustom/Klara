@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
+import logging
 from dotenv import load_dotenv
 
 from src.config.database import init_db
@@ -9,6 +10,8 @@ from src.api.routes import auth, contracts, upload, chat
 
 # Load environment variables
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 # Note: Backend services are organized as follows:
 # - src/services/extraction.py - Contract data extraction

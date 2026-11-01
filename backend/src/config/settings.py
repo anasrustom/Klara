@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     
     # Gemini AI
     gemini_api_key: str = ""
+    # Any model id from the Gemini API; the alias tracks the current Flash release
+    gemini_model: str = "gemini-flash-latest"
     
     # File Upload
     upload_dir: str = "./uploads"
