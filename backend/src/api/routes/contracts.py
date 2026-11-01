@@ -13,8 +13,30 @@ from src.models.risk import Risk, RiskSeverity, RiskType
 from src.models.clause import Clause
 from src.models.user import User
 from src.api.routes.auth import get_current_user
+from src.services.analysis_store import analysis_extras, analyze_and_save
+from src.services.llm import LLMError
 
 router = APIRouter()
+
+_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+def _risk_out(r: Risk) -> dict:
+    return {
+        "id": r.id,
+        "contract_id": r.contract_id,
+        "risk_type": r.risk_type.value,
+        "severity": r.severity.value,
+        "title": r.title,
+        "description": r.description,
+        "recommendation": r.recommendation,
+        "clause_reference": r.clause_reference,
+        "source_chunk_id": r.source_chunk_id,
+        "source_page": r.source_page,
+        "source_snippet": r.source_snippet,
+    }
+
+def _sorted_risks(risks) -> list:
+    return sorted(risks, key=lambda r: _SEVERITY_ORDER.get(r.severity.value, 9))
 
 # Request/Response models
 class RiskCreate(BaseModel):
@@ -89,7 +111,7 @@ async def list_contracts(
     total = result.scalar()
     
     # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(Contract.upload_date.desc()).offset((page - 1) * page_size).limit(page_size)
     
     result = await db.execute(query)
     contracts = result.scalars().all()
@@ -139,17 +161,7 @@ async def list_contracts(
             "summary": contract.summary,
             "purpose": contract.purpose,
             "scope": contract.scope,
-            "risks": [
-                {
-                    "id": r.id,
-                    "risk_type": r.risk_type.value,
-                    "severity": r.severity.value,
-                    "title": r.title,
-                    "description": r.description,
-                    "recommendation": r.recommendation,
-                    "clause_reference": r.clause_reference
-                } for r in contract.risks
-            ],
+            "risks": [_risk_out(r) for r in _sorted_risks(contract.risks)],
             "updated_at": contract.updated_at.isoformat()
         })
     
@@ -192,18 +204,21 @@ async def get_contract(
         "id": contract.id,
         "title": contract.title,
         "file_name": contract.file_name,
-        "file_path": contract.file_path,
         "file_type": contract.file_type.value,
         "upload_date": contract.upload_date.isoformat(),
         "uploaded_by": contract.uploaded_by,
         "status": contract.status.value,
+        "language": contract.language,
+        "pages": contract.pages,
         "parties": [
             {
                 "id": p.id,
                 "contract_id": p.contract_id,
                 "name": p.name,
                 "type": p.type.value,
-                "role": p.role.value
+                "role": p.role.value,
+                "source_page": p.source_page,
+                "source_snippet": p.source_snippet,
             } for p in contract.parties
         ],
         "key_dates": [
@@ -212,8 +227,10 @@ async def get_contract(
                 "contract_id": d.contract_id,
                 "date_type": d.date_type.value,
                 "date": d.date.isoformat(),
-                "description": d.description
-            } for d in contract.key_dates
+                "description": d.description,
+                "source_page": d.source_page,
+                "source_snippet": d.source_snippet,
+            } for d in sorted(contract.key_dates, key=lambda d: d.date)
         ],
         "financial_terms": [
             {
@@ -223,7 +240,9 @@ async def get_contract(
                 "amount": t.amount,
                 "currency": t.currency,
                 "schedule": t.schedule,
-                "description": t.description
+                "description": t.description,
+                "source_page": t.source_page,
+                "source_snippet": t.source_snippet,
             } for t in contract.financial_terms
         ],
         "governing_law": contract.governing_law,
@@ -234,20 +253,42 @@ async def get_contract(
         "summary": contract.summary,
         "purpose": contract.purpose,
         "scope": contract.scope,
-        "risks": [
-            {
-                "id": r.id,
-                "contract_id": r.contract_id,
-                "risk_type": r.risk_type.value,
-                "severity": r.severity.value,
-                "title": r.title,
-                "description": r.description,
-                "recommendation": r.recommendation,
-                "clause_reference": r.clause_reference
-            } for r in contract.risks
-        ],
+        "risks": [_risk_out(r) for r in _sorted_risks(contract.risks)],
+        "analysis_error": contract.analysis_error,
+        **analysis_extras(contract),
         "updated_at": contract.updated_at.isoformat()
     }
+
+@router.post("/{contract_id}/analyze")
+async def reanalyze_contract(
+    contract_id: str,
+    output_language: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run the AI analysis again for a stored contract and replace its AI-derived data.
+    Useful for contracts uploaded before analysis was persisted.
+    """
+    result = await db.execute(select(Contract).where(
+        Contract.id == contract_id,
+        Contract.uploaded_by == current_user.id
+    ))
+    contract = result.scalar_one_or_none()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    lang = output_language if output_language in ("en", "ar") else (contract.language or "en")
+    try:
+        await analyze_and_save(db, contract, output_language=lang)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except LLMError as e:
+        raise HTTPException(status_code=502, detail=f"AI analysis failed: {str(e)}")
+
+    contract.status = ContractStatus.completed
+    await db.commit()
+    return {"id": contract.id, "status": contract.status.value, "message": "Contract analyzed successfully."}
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(

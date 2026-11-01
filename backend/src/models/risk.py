@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, ForeignKey, Enum
+from sqlalchemy import Column, String, Text, ForeignKey, Enum, Integer
 from sqlalchemy.orm import relationship
 from src.config.database import Base
 import enum
@@ -28,5 +28,10 @@ class Risk(Base):
     description = Column(Text, nullable=False)
     recommendation = Column(Text)
     clause_reference = Column(String)
+    
+    # Where the finding came from in the contract text
+    source_chunk_id = Column(String)
+    source_page = Column(Integer)
+    source_snippet = Column(Text)
     
     contract = relationship("Contract", back_populates="risks")

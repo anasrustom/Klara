@@ -55,3 +55,46 @@ def strip_long_underscores(s: str, min_run: int = 5) -> str:
     if not isinstance(s, str):
         return s
     return re.sub(rf"[_]{{{min_run},}}", " ", s)
+
+
+from difflib import SequenceMatcher
+
+# One-to-one replacements so offsets in the normalized text match the original
+_QUOTE_FOLD = str.maketrans({"“": '"', "”": '"', "„": '"', "«": '"', "»": '"', "‘": "'", "’": "'", "`": "'"})
+
+
+def _fold(s: str) -> str:
+    return s.translate(_QUOTE_FOLD).lower()
+
+
+def locate_quote(text: str, quote: str, min_match: int = 25):
+    """
+    Find a model-supplied quote in the source text and return the matching span
+    copied from the source (never the model's wording). Tolerates curly vs straight
+    quotes, case and small paraphrases. Returns None when nothing close enough exists.
+    """
+    src = " ".join((text or "").split())
+    q = " ".join((quote or "").split()) if isinstance(quote, str) else ""
+    if not src or not q:
+        return None
+    fs, fq = _fold(src), _fold(q)
+    idx = fs.find(fq)
+    if idx != -1:
+        return src[idx : idx + len(q)]
+    m = SequenceMatcher(None, fs, fq, autojunk=False).find_longest_match(0, len(fs), 0, len(fq))
+    if m.size < max(min_match, int(len(fq) * 0.4)):
+        return None
+    start = max(0, m.a - m.b)
+    end = min(len(src), start + len(q))
+    # Snap to word boundaries
+    while start > 0 and src[start - 1] != " ":
+        start -= 1
+    while end < len(src) and src[end] != " ":
+        end += 1
+    return src[start:end].strip()
+
+
+def grounded_snippet(text: str, quote, max_len: int = 240) -> str:
+    """The quoted span when it can be found in the source text, else the opening of the text."""
+    snippet = locate_quote(text, quote) or " ".join((text or "").split())
+    return snippet if len(snippet) <= max_len else snippet[: max_len - 1].rstrip() + "…"

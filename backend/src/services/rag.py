@@ -29,6 +29,10 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-12
     return float(np.dot(a, b) / denom)
 
+# e5 models are trained with these prefixes; using them improves retrieval
+_PASSAGE_PREFIX = "passage: "
+_QUERY_PREFIX = "query: "
+
 def _word_chunks(
     text: str,
     approx_tokens: int = 220,
@@ -38,7 +42,7 @@ def _word_chunks(
     """
     Rough token-aware chunking by words with overlap.
     If page_offsets is provided (list of starting char positions per page in normalized text),
-    we approximate the chunk's page from its starting char.
+    we approximate the chunk's 1-based page from its starting char; otherwise page is None.
     """
     words = (text or "").split()
     if not words:
@@ -49,16 +53,16 @@ def _word_chunks(
     for w in words:
         prefix.append(prefix[-1] + len(w) + 1)  # +1 for space/newline approx
 
-    def page_for_char(start_char: int) -> int:
+    def page_for_char(start_char: int) -> Optional[int]:
         if not page_offsets:
-            return 0
+            return None
         page = 0
         for p, off in enumerate(page_offsets):
             if off <= start_char:
                 page = p
             else:
                 break
-        return page
+        return page + 1
 
     chunks: List[Dict[str, Any]] = []
     step = max(1, approx_tokens - overlap)
@@ -109,7 +113,8 @@ class RAGService:
         contract_id: str,
         text: str,
         language: str = "en",
-        page_offsets: Optional[List[int]] = None,  # <-- NEW
+        page_offsets: Optional[List[int]] = None,
+        user_id: Optional[str] = None,
     ) -> bool:
         """
         Build/replace the FAISS index for a contract.
@@ -130,10 +135,10 @@ class RAGService:
         # Page-aware chunking (uses page_offsets when provided)
         chunks = _word_chunks(text, approx_tokens=220, overlap=30, page_offsets=page_offsets)
         if not chunks:
-            chunks = [{"chunk_id": "c_00000", "page": 0, "section": None, "text": text[:2000]}]
+            chunks = [{"chunk_id": "c_00000", "page": None, "section": None, "text": text[:2000]}]
 
         # Embed chunks (cosine via normalized + IndexFlatIP)
-        texts = [c["text"] for c in chunks]
+        texts = [_PASSAGE_PREFIX + c["text"] for c in chunks]
         vecs = self.model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
         dim = vecs.shape[1]
 
@@ -146,8 +151,16 @@ class RAGService:
             "embeddings": vecs,
             "chunks": chunks,
             "language": language,
+            "user_id": str(user_id) if user_id is not None else None,
         }
         return True
+
+    def has_index(self, contract_id: str) -> bool:
+        return str(contract_id) in self._store
+
+    def get_chunks(self, contract_id: str) -> List[Dict[str, Any]]:
+        entry = self._store.get(str(contract_id))
+        return list(entry["chunks"]) if entry else []
 
     async def search_contract(self, contract_id: str, query: str, top_k: int = 5) -> List[Dict]:
         """
@@ -158,7 +171,7 @@ class RAGService:
         if entry is None or self.model is None:
             return []
 
-        q = self.model.encode([query], normalize_embeddings=True, convert_to_numpy=True)
+        q = self.model.encode([_QUERY_PREFIX + query], normalize_embeddings=True, convert_to_numpy=True)
         D, I = entry["index"].search(q, min(top_k, len(entry["chunks"])))
         idxs = I[0].tolist()
         sims = D[0].tolist()
@@ -173,7 +186,7 @@ class RAGService:
                     "chunk_id": c["chunk_id"],
                     "text": c["text"],
                     "score": float(score),
-                    "page": c.get("page", 0),
+                    "page": c.get("page"),
                     "section": c.get("section"),
                 }
             )
@@ -182,20 +195,23 @@ class RAGService:
     async def search_all_contracts(
         self,
         query: str,
-        user_id: Optional[str] = None,  
+        user_id: Optional[str] = None,
         top_k: int = 10
     ) -> List[Dict]:
         """
-        Global search across all contracts. Returns top_k across all indices.
+        Search across the contracts indexed for one user. Returns top_k across their indices.
+        Without a user_id nothing is searched, so one user can never see another's text.
         Each result: {contract_id, chunk_id, text, score, page, section}
         """
-        if self.model is None or not self._store:
+        if self.model is None or not self._store or user_id is None:
             return []
 
-        q = self.model.encode([query], normalize_embeddings=True, convert_to_numpy=True)[0] 
-        results: List[Tuple[str, int, float]] = []  
+        q = self.model.encode([_QUERY_PREFIX + query], normalize_embeddings=True, convert_to_numpy=True)[0]
+        results: List[Tuple[str, int, float]] = []
 
         for cid, entry in self._store.items():
+            if entry.get("user_id") != str(user_id):
+                continue
             index: faiss.IndexFlatIP = entry["index"]
             chunks = entry["chunks"]
             k = min(top_k, len(chunks))
@@ -217,7 +233,7 @@ class RAGService:
                     "chunk_id": c["chunk_id"],
                     "text": c["text"],
                     "score": score,
-                    "page": c.get("page", 0),
+                    "page": c.get("page"),
                     "section": c.get("section"),
                 }
             )
@@ -238,7 +254,7 @@ class RAGService:
                 self.model = SentenceTransformer(self.model_name)
             except Exception:
                 return None
-        v = self.model.encode([text], normalize_embeddings=True, convert_to_numpy=True)[0]
+        v = self.model.encode([_QUERY_PREFIX + text], normalize_embeddings=True, convert_to_numpy=True)[0]
         return v.tolist()
 
     def calculate_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
@@ -265,7 +281,7 @@ class RAGService:
         buf: List[str] = []
         total = 0
         for h in hits:
-            piece = f"[{h.get('chunk_id')}] (p.{h.get('page', 0)}): {h.get('text','').strip()}"
+            piece = f"[{h.get('chunk_id')}] (p.{h.get('page') or '?'}): {h.get('text','').strip()}"
             if not piece:
                 continue
             if total + len(piece) + 2 > max_context_length:

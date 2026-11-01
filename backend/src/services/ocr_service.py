@@ -1,10 +1,12 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 from io import BytesIO
 
 from pdfminer.high_level import extract_text
 from pypdf import PdfReader
 from docx import Document
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 from langdetect import detect
 
 from pdfminer.high_level import extract_text_to_fp
@@ -72,22 +74,57 @@ class OCRService:
     @staticmethod
     async def extract_text_from_docx(file_path: str) -> Dict[str, Any]:
         """
-        Extract from a DOCX.
-        Returns: { text: str, pages: int (est), language: str }
+        Extract from a DOCX, body paragraphs and tables in document order.
+        Pages follow the page breaks Word stored when the file was last saved
+        (w:lastRenderedPageBreak and explicit page breaks), so citations can name a page.
+        Returns: { text: str, pages: int, language: str, page_offsets: List[int] }
         """
         try:
             doc = Document(file_path)
-            text = " ".join([p.text for p in doc.paragraphs])
-            text = OCRService._preprocess_text(text)
+            body = doc.element.body
 
-            pages = max(1, len(text) // 2000)
+            # Collect raw text per page
+            page_texts: List[List[str]] = [[]]
+            for block in body.iterchildren():
+                tag = block.tag.rsplit("}", 1)[-1]
+                if tag == "p":
+                    block_text = Paragraph(block, doc).text
+                elif tag == "tbl":
+                    cells = []
+                    for row in Table(block, doc).rows:
+                        for cell in row.cells:
+                            ct = cell.text.strip()
+                            if ct and (not cells or cells[-1] != ct):
+                                cells.append(ct)
+                    block_text = " ".join(cells)
+                else:
+                    continue
+
+                breaks = len(block.xpath(".//w:lastRenderedPageBreak | .//w:br[@w:type='page']"))
+                # A break inside this block starts a new page at the block (close enough for citations)
+                for _ in range(breaks):
+                    if page_texts[-1]:
+                        page_texts.append([])
+                if block_text and block_text.strip():
+                    page_texts[-1].append(block_text)
+
+            norm_pages = [OCRService._preprocess_text(" ".join(p)) for p in page_texts]
+            norm_pages = [p for p in norm_pages if p]
+            text = " ".join(norm_pages)
+
+            page_offsets = []
+            acc = 0
+            for pt in norm_pages:
+                page_offsets.append(acc)
+                acc += len(pt) + 1
 
             language = OCRService._detect_language(text)
 
             return {
                 "text": text,
-                "pages": pages,
-                "language": language
+                "pages": max(1, len(norm_pages)),
+                "language": language,
+                "page_offsets": page_offsets if len(norm_pages) > 1 else [],
             }
 
         except Exception as e:
