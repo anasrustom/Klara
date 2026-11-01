@@ -32,29 +32,18 @@ export default function DashboardPage() {
     try {
       const token = localStorage.getItem('access_token');
       
-      console.log('🔑 Auth Debug:', {
-        hasToken: !!token,
-        tokenLength: token?.length,
-        tokenPreview: token?.substring(0, 20) + '...',
-        apiUrl: process.env.NEXT_PUBLIC_API_URL
-      });
-      
       // Fetch dashboard stats from backend
       const statsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contracts/dashboard/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
-      
-      console.log('� Stats Response:', statsResponse.status, statsResponse.statusText);
 
       if (statsResponse.ok) {
         const data = await statsResponse.json();
-        console.log('✅ Stats data received:', data);
         setStats(data);
       } else {
-        console.warn('⚠️ Stats request failed, using fallback data');
-        // Use fallback data
+        // Empty state when the request fails
         setStats({
           total_contracts: 0,
           pending_reviews: 0,
