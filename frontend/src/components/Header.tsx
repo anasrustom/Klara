@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -16,6 +16,17 @@ export default function Header({ title, showLogout = true }: HeaderProps) {
   const router = useRouter();
   const { t } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  // The signed-in user's name is stored at login; read it after mount to avoid a hydration mismatch
+  useEffect(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      setUserName(user.name || user.email || '');
+    } catch {
+      setUserName('');
+    }
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -41,7 +52,7 @@ export default function Header({ title, showLogout = true }: HeaderProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
-              <span className="font-medium">User</span>
+              <span className="font-medium">{userName}</span>
             </div>
             
             <button
