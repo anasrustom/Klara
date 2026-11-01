@@ -24,8 +24,7 @@ async def _load_previous_messages(
     stmt = (
         select(ChatHistory)
         .where(ChatHistory.user_id == user_id)
-        .order_by(desc(ChatHistory.order_by(desc(ChatHistory.timestamp))
-))
+        .order_by(desc(ChatHistory.timestamp))
         .limit(limit)
     )
     if contract_id:
@@ -33,8 +32,7 @@ async def _load_previous_messages(
             select(ChatHistory)
             .where(ChatHistory.user_id == user_id)
             .where(ChatHistory.contract_id == contract_id)
-            .order_by(desc(ChatHistory.order_by(desc(ChatHistory.timestamp))
-))
+            .order_by(desc(ChatHistory.timestamp))
             .limit(limit)
         )
 
@@ -127,8 +125,7 @@ async def get_chat_history(
     stmt = (
         select(ChatHistory)
         .where(ChatHistory.user_id == current_user.id)
-        .order_by(desc(ChatHistory.order_by(desc(ChatHistory.timestamp))
-))
+        .order_by(desc(ChatHistory.timestamp))
         .limit(limit)
     )
     if contract_id:
@@ -136,8 +133,7 @@ async def get_chat_history(
             select(ChatHistory)
             .where(ChatHistory.user_id == current_user.id)
             .where(ChatHistory.contract_id == contract_id)
-            .order_by(desc(ChatHistory.order_by(desc(ChatHistory.timestamp))
-))
+            .order_by(desc(ChatHistory.timestamp))
             .limit(limit)
         )
 
