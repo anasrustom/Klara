@@ -21,7 +21,7 @@
   <img alt="Google Gemini" src="https://img.shields.io/badge/Google-Gemini-8E75FF?style=for-the-badge&logo=googlegemini&logoColor=8E75FF&labelColor=0d1117">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-009688?style=for-the-badge&logo=fastapi&logoColor=009688&labelColor=0d1117">
   <img alt="Next.js 14" src="https://img.shields.io/badge/Next.js-14-ffffff?style=for-the-badge&logo=nextdotjs&logoColor=white&labelColor=0d1117">
-  <img alt="Arabic and English" src="https://img.shields.io/badge/العربية-English-10B981?style=for-the-badge&labelColor=0d1117">
+  <img alt="Arabic and English" src="https://img.shields.io/badge/Arabic_%2B_English-RTL-10B981?style=for-the-badge&labelColor=0d1117">
 </p>
 
 <br>
@@ -89,16 +89,12 @@ In law, an answer you can't verify is worth nothing. And more than 400 million p
 
 ```mermaid
 flowchart LR
-    A[PDF or DOCX] --> B[Text extraction<br>pdfminer, python-docx]
-    B --> C[Arabic normalisation<br>and language detection]
-    C --> D[Passages of about 220 words<br>with page numbers]
-    D --> E[multilingual-e5 embeddings<br>FAISS index per contract]
-    E --> F[Retrieve evidence<br>for 11 legal topics]
-    F --> G[Gemini Flash<br>one JSON call]
-    G --> H[Parties, dates, money terms,<br>risks, summary, citations]
-    H --> I[(SQLite)]
-    I --> J[Bilingual Next.js app]
-    E --> K[Cited chat]
+    A[Contract<br>PDF or DOCX] --> B[Clean text<br>Arabic normalised]
+    B --> C[Passages<br>e5 + FAISS]
+    C --> D[Evidence for<br>11 legal topics]
+    D --> E[Gemini<br>one JSON call]
+    E --> F[(Cited risks,<br>parties, dates,<br>money, summary)]
+    C --> G[Cited chat]
 ```
 
 <details>
@@ -165,14 +161,12 @@ Klara was built in one weekend. It is a working prototype, and the list above is
 
 ## Team
 
-<table>
-  <tr>
-    <td align="center" width="25%"><a href="https://github.com/anasrustom"><img src="https://github.com/anasrustom.png?size=160" width="72" alt="Anas Rustom"><br><b>Anas Rustom</b></a><br><sub>Software engineering, product, Arabic interface</sub></td>
-    <td align="center" width="25%"><a href="https://github.com/mohamed-ali-ai"><img src="https://github.com/mohamed-ali-ai.png?size=160" width="72" alt="Mohamed Ali"><br><b>Mohamed Ali</b></a><br><sub>AI pipeline: retrieval, analysis, chat</sub></td>
-    <td align="center" width="25%"><b>Mahmoud Ali</b><br><sub>AI engineering</sub></td>
-    <td align="center" width="25%"><b>Abdulrahman Abushahba</b><br><sub>Product and brand design</sub></td>
-  </tr>
-</table>
+| Name | Role |
+|---|---|
+| **[Anas Rustom](https://github.com/anasrustom)** | Software engineering, product, Arabic interface |
+| **[Mohamed Ali](https://github.com/mohamed-ali-ai)** | AI pipeline: retrieval, analysis, chat |
+| **Mahmoud Ali** | AI engineering |
+| **Abdulrahman Abushahba** | Product and brand design |
 
 <p align="center">
   <sub>Built at the <b>AIX Hackathon</b>, Doha, October 2025.</sub>
